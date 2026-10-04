@@ -45,7 +45,8 @@ class ScreenCaptureService : Service() {
                 .build()
         )
 
-        val code = intent?.getIntExtra(EXTRA_RESULT_CODE, -1) ?: return START_NOT_STICKY
+        if (intent == null) return START_NOT_STICKY
+        val code = intent.getIntExtra(EXTRA_RESULT_CODE, -1)
         val data = if (Build.VERSION.SDK_INT >= 33)
             intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
         else @Suppress("DEPRECATION") intent.getParcelableExtra(EXTRA_RESULT_DATA)
