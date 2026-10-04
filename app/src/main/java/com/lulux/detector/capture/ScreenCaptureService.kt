@@ -1,8 +1,11 @@
 package com.lulux.detector.capture
 
 import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -63,14 +66,20 @@ class ScreenCaptureService : Service() {
             return START_NOT_STICKY
         }
 
-        startForeground(
-            1001,
-            Notification.Builder(this, "capture")
-                .setContentTitle("Offline UI Detector")
-                .setContentText("Screen detection active")
-                .setSmallIcon(android.R.drawable.ic_menu_view)
-                .build()
+        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        nm.createNotificationChannel(
+            NotificationChannel("capture", "Screen Capture", NotificationManager.IMPORTANCE_LOW)
         )
+        val notif = Notification.Builder(this, "capture")
+            .setContentTitle("Offline UI Detector")
+            .setContentText("Screen detection active")
+            .setSmallIcon(android.R.drawable.ic_menu_view)
+            .build()
+        if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(1001, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+        } else {
+            startForeground(1001, notif)
+        }
 
         if (intent == null) return START_NOT_STICKY
         val code = intent.getIntExtra(EXTRA_RESULT_CODE, -1)
@@ -79,7 +88,12 @@ class ScreenCaptureService : Service() {
         else @Suppress("DEPRECATION") intent.getParcelableExtra(EXTRA_RESULT_DATA)
 
         if (data == null) return START_NOT_STICKY
-        startCapture(code, data)
+        val ok = runCatching { startCapture(code, data) }
+        if (ok.isFailure) {
+            lastMessage = "Capture gagal: ${ok.exceptionOrNull()?.message}"
+            stopCapture()
+            stopSelf()
+        }
         return START_NOT_STICKY
     }
 

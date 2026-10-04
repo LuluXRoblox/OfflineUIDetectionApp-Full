@@ -51,35 +51,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"/>
 
-        <Button
-            android:id="@+id/calibrate"
-            android:text="ROI Calibration"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
 
-        <Button
-            android:id="@+id/addWeapon"
-            android:text="Add / Train Weapon"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
 
-        <Button
-            android:id="@+id/addScope"
-            android:text="Add / Train Scope"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
 
-        <Button
-            android:id="@+id/trainAds"
-            android:text="Train ADS Open / Closed"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
 
-        <Button
-            android:id="@+id/trainStance"
-            android:text="Train Stance"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
 
         <Button
             android:id="@+id/config"

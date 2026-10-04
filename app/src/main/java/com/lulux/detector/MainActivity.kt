@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
@@ -20,8 +21,15 @@ import com.lulux.detector.config.RecoilConfig
 import com.lulux.detector.overlay.FloatingOverlayService
 import com.lulux.detector.storage.LocalStorage
 
+/**
+ * App utama hanya untuk: izin, start/stop capture, tampil/sembunyi panel floating, dan config.
+ * Training sample & kalibrasi ROI dilakukan dari panel floating di dalam game.
+ */
 class MainActivity : Activity() {
-    companion object { private const val REQ_CAPTURE = 7001 }
+    companion object {
+        private const val REQ_CAPTURE = 7001
+        private const val REQ_NOTIF = 7002
+    }
 
     private lateinit var master: Switch
     private lateinit var status: TextView
@@ -38,13 +46,14 @@ class MainActivity : Activity() {
         debug = findViewById(R.id.debug)
 
         createNotificationChannel()
+        askNotificationPermission()
 
         master.setOnCheckedChangeListener { _, checked ->
             ScreenCaptureService.engine?.setEnabled(checked)
             updateDebug()
         }
 
-        findViewById<Button>(R.id.startCapture).setOnClickListener { requestCapture() }
+        findViewById<Button>(R.id.startCapture).setOnClickListener { startFlow() }
         findViewById<Button>(R.id.stopCapture).setOnClickListener {
             startService(Intent(this, ScreenCaptureService::class.java).setAction(ScreenCaptureService.ACTION_STOP))
         }
@@ -52,18 +61,32 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.stopFloating).setOnClickListener {
             stopService(Intent(this, FloatingOverlayService::class.java))
         }
-
-        findViewById<Button>(R.id.addWeapon).setOnClickListener { trainLabel("weapon", "Nama senjata, mis. M416") }
-        findViewById<Button>(R.id.addScope).setOnClickListener { trainLabel("scope", "Nama scope, mis. 3x") }
-        findViewById<Button>(R.id.trainAds).setOnClickListener { trainAdsDialog() }
-        findViewById<Button>(R.id.trainStance).setOnClickListener { trainStanceDialog() }
         findViewById<Button>(R.id.config).setOnClickListener { configDialog() }
-        findViewById<Button>(R.id.calibrate).setOnClickListener {
-            Toast.makeText(this, "Buka game, lalu tekan tombol ROI di panel floating.", Toast.LENGTH_LONG).show()
+    }
+
+    private fun askNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), REQ_NOTIF)
         }
     }
 
-    private fun requestCapture() {
+    private fun hasOverlayPermission(): Boolean = Settings.canDrawOverlays(this)
+
+    private fun askOverlayPermission() {
+        Toast.makeText(
+            this,
+            "Aktifkan 'Tampil di atas aplikasi lain' untuk app ini, lalu kembali dan tekan Start lagi.",
+            Toast.LENGTH_LONG
+        ).show()
+        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+    }
+
+    // Satu tombol: cek izin overlay -> minta izin screen capture -> panel floating otomatis muncul
+    private fun startFlow() {
+        if (!hasOverlayPermission()) {
+            askOverlayPermission()
+            return
+        }
         val pm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         startActivityForResult(pm.createScreenCaptureIntent(), REQ_CAPTURE)
     }
@@ -76,57 +99,16 @@ class MainActivity : Activity() {
             putExtra(ScreenCaptureService.EXTRA_RESULT_DATA, data)
         }
         startForegroundService(i)
-        Toast.makeText(this, "Screen capture aktif. Tampilkan panel floating lalu nyalakan Master.", Toast.LENGTH_SHORT).show()
+        showFloating()
+        Toast.makeText(this, "Capture aktif. Buka game, lalu pakai panel floating.", Toast.LENGTH_LONG).show()
     }
 
     private fun showFloating() {
-        if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(
-                this,
-                "Aktifkan izin 'Tampil di atas aplikasi lain', lalu kembali dan tekan lagi.",
-                Toast.LENGTH_LONG
-            ).show()
-            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        if (!hasOverlayPermission()) {
+            askOverlayPermission()
             return
         }
         startForegroundService(Intent(this, FloatingOverlayService::class.java))
-    }
-
-    // Simpan "target" training. Sample diambil dari panel floating (tombol Capture) saat di dalam game.
-    private fun setTarget(group: String, label: String) {
-        storage.saveTrainTarget(group, label)
-        Toast.makeText(
-            this,
-            "Target: $group = $label. Buka game, aktifkan kondisinya, tekan Capture di panel floating.",
-            Toast.LENGTH_LONG
-        ).show()
-    }
-
-    private fun trainLabel(group: String, title: String) {
-        val input = EditText(this)
-        input.hint = title
-        AlertDialog.Builder(this).setTitle("Nama label").setView(input)
-            .setMessage("Setelah disimpan, buka game dengan kondisi itu aktif, lalu tekan Capture di panel floating.")
-            .setPositiveButton("Simpan target") { _, _ ->
-                val label = input.text.toString().trim()
-                if (label.isNotEmpty()) setTarget(group, label)
-            }.setNegativeButton("Batal", null).show()
-    }
-
-    private fun trainAdsDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("Training ADS")
-            .setItems(arrayOf("ADS terbuka (scope aktif)", "ADS tertutup (tidak ADS)")) { _, which ->
-                if (which == 0) setTarget("ads", "open") else setTarget("ads_off", "off")
-            }.show()
-    }
-
-    private fun trainStanceDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("Training Stance")
-            .setItems(arrayOf("Tombol 4 aktif (crouch)", "Tombol 5 aktif (prone)")) { _, which ->
-                if (which == 0) setTarget("stance_crouch", "CROUCH") else setTarget("stance_prone", "PRONE")
-            }.show()
     }
 
     private fun configDialog() {
@@ -145,7 +127,7 @@ class MainActivity : Activity() {
                 }
                 list += RecoilConfig(w.text.toString(), s.text.toString(), st.text.toString(), true)
                 storage.saveConfigs(list)
-                Toast.makeText(this, "Config tersimpan (berlaku setelah Start Capture ulang).", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Config tersimpan (berlaku setelah Start ulang).", Toast.LENGTH_SHORT).show()
             }.setNegativeButton("Batal", null).show()
     }
 

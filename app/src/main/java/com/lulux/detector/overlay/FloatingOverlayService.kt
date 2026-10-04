@@ -17,7 +17,9 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -28,23 +30,42 @@ import com.lulux.detector.storage.LocalStorage
 import kotlin.math.abs
 
 /**
- * Panel floating di atas game: status deteksi + tombol ON/OFF, Capture sample, ROI editor.
+ * Panel floating di atas game: status deteksi, ON/OFF, Train (semua training ada di sini), ROI editor.
  * Hanya membaca layar & menampilkan status. Tidak mengirim sentuhan/input apa pun.
  */
 class FloatingOverlayService : Service() {
     private lateinit var wm: WindowManager
     private val ui = Handler(Looper.getMainLooper())
     private var panel: LinearLayout? = null
-    private var panelParams: WindowManager.LayoutParams? = null
     private var body: LinearLayout? = null
+    private var trainMenu: LinearLayout? = null
     private var statusView: TextView? = null
     private var masterBtn: Button? = null
     private var editor: FrameLayout? = null
+    private var inputWin: LinearLayout? = null
+    private var target: Pair<String, String>? = null
+    private var countdown = 0
 
     private val tick = object : Runnable {
         override fun run() {
             updateStatus()
             ui.postDelayed(this, 300)
+        }
+    }
+
+    private val countdownTick = object : Runnable {
+        override fun run() {
+            if (countdown > 0) {
+                ScreenCaptureService.lastMessage = "Capture dalam ${countdown}d ... siapkan kondisinya"
+                countdown--
+                ui.postDelayed(this, 1000)
+            } else {
+                val t = target
+                if (t != null) {
+                    ScreenCaptureService.lastMessage = "Mengambil sample ..."
+                    ScreenCaptureService.pendingSample = t
+                }
+            }
         }
     }
 
@@ -57,7 +78,13 @@ class FloatingOverlayService : Service() {
             return
         }
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        buildPanel()
+        target = LocalStorage(this).loadTrainTarget()
+        val ok = runCatching { buildPanel() }.isSuccess
+        if (!ok) {
+            Toast.makeText(this, "Gagal menampilkan panel floating", Toast.LENGTH_LONG).show()
+            stopSelf()
+            return
+        }
         ui.post(tick)
     }
 
@@ -89,6 +116,13 @@ class FloatingOverlayService : Service() {
         return b
     }
 
+    private fun hRow(vararg views: View): LinearLayout {
+        val r = LinearLayout(this)
+        r.orientation = LinearLayout.HORIZONTAL
+        for (v in views) r.addView(v)
+        return r
+    }
+
     private fun buildPanel() {
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
@@ -110,16 +144,35 @@ class FloatingOverlayService : Service() {
         status.typeface = Typeface.MONOSPACE
         status.text = "..."
 
-        val row = LinearLayout(this)
-        row.orientation = LinearLayout.HORIZONTAL
         val master = makeButton("OFF") { toggleMaster() }
-        row.addView(master)
-        row.addView(makeButton("Capture") { captureSample() })
-        row.addView(makeButton("ROI") { showEditor() })
-        row.addView(makeButton("✕") { stopSelf() })
+        val mainRow = hRow(
+            master,
+            makeButton("Train") { toggleTrainMenu() },
+            makeButton("ROI") { showEditor() },
+            makeButton("✕") { stopSelf() }
+        )
+
+        // Menu training: pilih target -> tekan Capture (hitung mundur 3 detik) saat kondisi aktif di game
+        val train = LinearLayout(this)
+        train.orientation = LinearLayout.VERTICAL
+        train.visibility = View.GONE
+        train.addView(hRow(
+            makeButton("ADS buka") { setTarget("ads", "open") },
+            makeButton("ADS tutup") { setTarget("ads_off", "off") }
+        ))
+        train.addView(hRow(
+            makeButton("Senjata…") { askLabel("weapon", "Nama senjata, mis. M416") },
+            makeButton("Scope…") { askLabel("scope", "Nama scope, mis. 3x") }
+        ))
+        train.addView(hRow(
+            makeButton("4 Crouch") { setTarget("stance_crouch", "CROUCH") },
+            makeButton("5 Prone") { setTarget("stance_prone", "PRONE") }
+        ))
+        train.addView(makeButton("● Capture (3 dtk)") { captureSample() })
 
         bodyLayout.addView(status)
-        bodyLayout.addView(row)
+        bodyLayout.addView(mainRow)
+        bodyLayout.addView(train)
         root.addView(header)
         root.addView(bodyLayout)
 
@@ -156,7 +209,7 @@ class FloatingOverlayService : Service() {
                         if (abs(dx) > 6 || abs(dy) > 6) moved = true
                         p.x = startX + dx
                         p.y = startY + dy
-                        wm.updateViewLayout(root, p)
+                        runCatching { wm.updateViewLayout(root, p) }
                     }
                     MotionEvent.ACTION_UP -> {
                         if (!moved) {
@@ -173,10 +226,72 @@ class FloatingOverlayService : Service() {
 
         wm.addView(root, p)
         panel = root
-        panelParams = p
         body = bodyLayout
+        trainMenu = train
         statusView = status
         masterBtn = master
+    }
+
+    private fun toggleTrainMenu() {
+        val m = trainMenu ?: return
+        m.visibility = if (m.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+    }
+
+    private fun setTarget(group: String, label: String) {
+        target = Pair(group, label)
+        LocalStorage(this).saveTrainTarget(group, label)
+        ScreenCaptureService.lastMessage = "Target: $group = $label"
+        updateStatus()
+    }
+
+    // Input nama senjata/scope: jendela kecil yang bisa fokus supaya keyboard muncul.
+    private fun askLabel(group: String, hint: String) {
+        if (inputWin != null) return
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setBackgroundColor(0xEE10161C.toInt())
+        box.setPadding(dp(10), dp(8), dp(10), dp(8))
+
+        val et = EditText(this)
+        et.hint = hint
+        et.setHintTextColor(Color.GRAY)
+        et.setTextColor(Color.WHITE)
+        et.setSingleLine(true)
+        et.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI or EditorInfo.IME_ACTION_DONE
+        et.minWidth = dp(220)
+
+        box.addView(et)
+        box.addView(hRow(
+            makeButton("OK") {
+                val l = et.text.toString().trim()
+                if (l.isNotEmpty()) setTarget(group, l)
+                closeInput()
+            },
+            makeButton("Batal") { closeInput() }
+        ))
+
+        val p = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            0,
+            PixelFormat.TRANSLUCENT
+        )
+        p.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        p.y = dp(16)
+        p.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
+        val ok = runCatching { wm.addView(box, p) }.isSuccess
+        if (ok) {
+            inputWin = box
+            et.requestFocus()
+        }
+    }
+
+    private fun closeInput() {
+        val w = inputWin
+        if (w != null) runCatching { wm.removeView(w) }
+        inputWin = null
     }
 
     private fun toggleMaster() {
@@ -194,13 +309,13 @@ class FloatingOverlayService : Service() {
             Toast.makeText(this, "Start Screen Capture dulu dari app", Toast.LENGTH_SHORT).show()
             return
         }
-        val t = LocalStorage(this).loadTrainTarget()
-        if (t == null) {
-            Toast.makeText(this, "Pilih target dulu di app (tombol Train ...)", Toast.LENGTH_SHORT).show()
+        if (target == null) {
+            Toast.makeText(this, "Pilih target dulu (ADS / Senjata / Scope / Crouch / Prone)", Toast.LENGTH_SHORT).show()
             return
         }
-        ScreenCaptureService.lastMessage = "Mengambil sample: ${t.first} = ${t.second} ..."
-        ScreenCaptureService.pendingSample = t
+        ui.removeCallbacks(countdownTick)
+        countdown = 3
+        ui.post(countdownTick)
     }
 
     private fun updateStatus() {
@@ -221,8 +336,13 @@ class FloatingOverlayService : Service() {
             sb.append("\nSTANCE : ").append(s.stance.name)
             sb.append("\nCONFIG : ").append(e.getMatchedConfig() ?: "-")
         }
-        val m = ScreenCaptureService.lastMessage
-        if (m.isNotEmpty()) sb.append("\n").append(m)
+        val m = trainMenu
+        val t = target
+        if (m != null && m.visibility == View.VISIBLE && t != null) {
+            sb.append("\nTARGET : ").append(t.first).append(" = ").append(t.second)
+        }
+        val msg = ScreenCaptureService.lastMessage
+        if (msg.isNotEmpty()) sb.append("\n").append(msg)
         statusView?.text = sb.toString()
     }
 
@@ -242,16 +362,16 @@ class FloatingOverlayService : Service() {
             )
         )
 
-        val bar = LinearLayout(this)
-        bar.orientation = LinearLayout.HORIZONTAL
+        val bar = hRow(
+            makeButton("Simpan") {
+                LocalStorage(this).saveRoi(view.toRoiConfig())
+                ScreenCaptureService.lastMessage = "ROI tersimpan"
+                closeEditor()
+            },
+            makeButton("Reset") { view.setConfig(RoiConfig()) },
+            makeButton("Batal") { closeEditor() }
+        )
         bar.setBackgroundColor(0xDD10161C.toInt())
-        bar.addView(makeButton("Simpan") {
-            LocalStorage(this).saveRoi(view.toRoiConfig())
-            ScreenCaptureService.lastMessage = "ROI tersimpan"
-            closeEditor()
-        })
-        bar.addView(makeButton("Reset") { view.setConfig(RoiConfig()) })
-        bar.addView(makeButton("Batal") { closeEditor() })
         val barLp = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
@@ -274,9 +394,11 @@ class FloatingOverlayService : Service() {
         p.y = 0
         p.layoutInDisplayCutoutMode =
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        wm.addView(frame, p)
-        editor = frame
-        panel?.visibility = View.GONE
+        val ok = runCatching { wm.addView(frame, p) }.isSuccess
+        if (ok) {
+            editor = frame
+            panel?.visibility = View.GONE
+        }
     }
 
     private fun closeEditor() {
@@ -288,7 +410,9 @@ class FloatingOverlayService : Service() {
 
     override fun onDestroy() {
         ui.removeCallbacks(tick)
+        ui.removeCallbacks(countdownTick)
         if (::wm.isInitialized) {
+            closeInput()
             closeEditor()
             val p = panel
             if (p != null) runCatching { wm.removeView(p) }
