@@ -26,6 +26,7 @@ class RoiEditorView(context: Context, initial: RoiConfig) : View(context) {
     private val boxes = mutableListOf<Box>()
     private var control: RoiRect = initial.control
     private var active: Box? = null
+    private var selected: Box? = null
     private var mode = 0          // 1 = geser, 2 = ubah ukuran
     private var lastX = 0f
     private var lastY = 0f
@@ -52,6 +53,29 @@ class RoiEditorView(context: Context, initial: RoiConfig) : View(context) {
         boxes += Box("3 ADS", 0xFFFF5252.toInt(), c.ads.x, c.ads.y, c.ads.width, c.ads.height)
         boxes += Box("4 Crouch", 0xFF69F0AE.toInt(), c.crouch.x, c.crouch.y, c.crouch.width, c.crouch.height)
         boxes += Box("5 Prone", 0xFFE040FB.toInt(), c.prone.x, c.prone.y, c.prone.width, c.prone.height)
+        selected = boxes.firstOrNull()
+        invalidate()
+    }
+
+    /** Geser kotak terpilih sebanyak dxPx/dyPx piksel layar (positif = kanan/bawah). */
+    fun nudge(dxPx: Int, dyPx: Int) {
+        val b = selected ?: return
+        val vw = width.toFloat()
+        val vh = height.toFloat()
+        if (vw <= 0f || vh <= 0f) return
+        b.x = (b.x + dxPx / vw).coerceIn(0f, 1f - b.w)
+        b.y = (b.y + dyPx / vh).coerceIn(0f, 1f - b.h)
+        invalidate()
+    }
+
+    /** Ubah ukuran kotak terpilih sebanyak dwPx/dhPx piksel layar. */
+    fun resizeBy(dwPx: Int, dhPx: Int) {
+        val b = selected ?: return
+        val vw = width.toFloat()
+        val vh = height.toFloat()
+        if (vw <= 0f || vh <= 0f) return
+        b.w = (b.w + dwPx / vw).coerceIn(0.005f, 1f - b.x)
+        b.h = (b.h + dhPx / vh).coerceIn(0.005f, 1f - b.y)
         invalidate()
     }
 
@@ -81,11 +105,21 @@ class RoiEditorView(context: Context, initial: RoiConfig) : View(context) {
             fillPaint.color = (b.color and 0x00FFFFFF) or 0x33000000
             canvas.drawRect(l, t, r, bt, fillPaint)
             strokePaint.color = b.color
+            strokePaint.strokeWidth = (if (b === selected) 4f else 2f) * density
             canvas.drawRect(l, t, r, bt, strokePaint)
             fillPaint.color = b.color
             canvas.drawRect(r - handleHalf, bt - handleHalf, r + handleHalf, bt + handleHalf, fillPaint)
             textPaint.color = b.color
             canvas.drawText(b.name, l, t - 4f * density, textPaint)
+        }
+        val sel = selected
+        if (sel != null) {
+            textPaint.color = sel.color
+            canvas.drawText(
+                sel.name + ": x=" + (sel.x * vw).toInt() + " y=" + (sel.y * vh).toInt() +
+                    " w=" + (sel.w * vw).toInt() + " h=" + (sel.h * vh).toInt() + " px",
+                12f * density, vh - 40f * density, textPaint
+            )
         }
         textPaint.color = Color.WHITE
         canvas.drawText(
@@ -122,8 +156,11 @@ class RoiEditorView(context: Context, initial: RoiConfig) : View(context) {
                         }
                     }
                 }
+                val hit = active
+                if (hit != null) selected = hit
                 lastX = e.x
                 lastY = e.y
+                invalidate()
             }
             MotionEvent.ACTION_MOVE -> {
                 val b = active

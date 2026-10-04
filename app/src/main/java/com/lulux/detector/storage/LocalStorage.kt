@@ -65,4 +65,21 @@ class LocalStorage(private val context: Context) {
         val l = prefs.getString("train_label", null) ?: return null
         return Pair(g, l)
     }
+
+    fun loadDragInterval(): Long = prefs.getLong("drag_interval_ms", 500L).coerceIn(50L, 60000L)
+
+    fun loadDragDistance(): Int = prefs.getInt("drag_distance_px", 20).coerceIn(1, 2000)
+
+    fun saveDragSettings(intervalMs: Long, distancePx: Int) {
+        prefs.edit()
+            .putLong("drag_interval_ms", intervalMs.coerceIn(50L, 60000L))
+            .putInt("drag_distance_px", distancePx.coerceIn(1, 2000))
+            .apply()
+    }
+
+    fun loadThreshold(): Float = prefs.getFloat("threshold", 0.88f)
+
+    fun saveThreshold(v: Float) {
+        prefs.edit().putFloat("threshold", v).apply()
+    }
 }

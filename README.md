@@ -39,3 +39,14 @@ Screen capture requires the user to approve the Android `MediaProjection` prompt
 ## License
 
 No license is currently included. Unless a license is added, this repository does not grant permission to reuse or redistribute its code.
+
+## Auto Drag (Floating)
+
+Floating panel sekarang memiliki **AUTO DRAG**:
+- `Setiap X ms` mengatur interval pengulangan.
+- `Turun Y px` mengatur jarak drag vertikal.
+- `ON/OFF` menjalankan atau menghentikan loop drag.
+- Drag dilakukan melalui Android Accessibility Service dan dimulai dari titik tengah layar.
+- Aktifkan **Izin Drag** sekali di Pengaturan Aksesibilitas Android sebelum menekan ON.
+
+Nilai tersimpan di local storage aplikasi. Interval dibatasi 50–60000 ms dan jarak 1–2000 px.

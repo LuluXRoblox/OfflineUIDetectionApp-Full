@@ -184,7 +184,7 @@ class ScreenCaptureService : Service() {
                 pendingSample = null
                 saveSample(pending, bitmap, roi)
             }
-            engine?.process(bitmap, roi)
+            engine?.process(bitmap, roi, st.loadThreshold())
             bitmap.recycle()
         } finally {
             image.close()

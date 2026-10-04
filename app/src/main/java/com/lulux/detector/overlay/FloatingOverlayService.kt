@@ -12,6 +12,8 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
+import android.content.ComponentName
+import android.view.inputmethod.InputMethodManager
 import android.util.DisplayMetrics
 import android.view.Gravity
 import android.view.MotionEvent
@@ -37,7 +39,9 @@ class FloatingOverlayService : Service() {
     private lateinit var wm: WindowManager
     private val ui = Handler(Looper.getMainLooper())
     private var panel: LinearLayout? = null
-    private var body: LinearLayout? = null
+    private var body: View? = null
+    private var thrView: TextView? = null
+    private var thr = 0.88f
     private var trainMenu: LinearLayout? = null
     private var statusView: TextView? = null
     private var masterBtn: Button? = null
@@ -45,6 +49,13 @@ class FloatingOverlayService : Service() {
     private var inputWin: LinearLayout? = null
     private var target: Pair<String, String>? = null
     private var countdown = 0
+    private var stepPx = 1
+    private var dragIntervalMs = 500L
+    private var dragDistancePx = 20
+    private var dragBtn: Button? = null
+    private var dragStatus: TextView? = null
+    private var dragIntervalBtn: Button? = null
+    private var dragDistanceBtn: Button? = null
 
     private val tick = object : Runnable {
         override fun run() {
@@ -79,6 +90,9 @@ class FloatingOverlayService : Service() {
         }
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         target = LocalStorage(this).loadTrainTarget()
+        thr = LocalStorage(this).loadThreshold()
+        dragIntervalMs = LocalStorage(this).loadDragInterval()
+        dragDistancePx = LocalStorage(this).loadDragDistance()
         val ok = runCatching { buildPanel() }.isSuccess
         if (!ok) {
             Toast.makeText(this, "Gagal menampilkan panel floating", Toast.LENGTH_LONG).show()
@@ -123,7 +137,10 @@ class FloatingOverlayService : Service() {
         return r
     }
 
+    @Suppress("DEPRECATION")
     private fun buildPanel() {
+        val real = DisplayMetrics()
+        wm.defaultDisplay.getRealMetrics(real)
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
         root.setBackgroundColor(0xDD10161C.toInt())
@@ -152,29 +169,75 @@ class FloatingOverlayService : Service() {
             makeButton("✕") { stopSelf() }
         )
 
+        // Repeated downward drag controls. The actual gesture is performed by AccessibilityService.
+        val dragTitle = TextView(this).apply {
+            text = "AUTO DRAG"
+            setTextColor(Color.WHITE)
+            textSize = 11f
+            typeface = Typeface.BOLD
+            setPadding(dp(8), dp(5), dp(8), dp(2))
+        }
+        val dragInfo = TextView(this).apply {
+            setTextColor(0xFFB8C5D1.toInt())
+            textSize = 10f
+            setPadding(dp(8), 0, dp(8), dp(2))
+        }
+        dragStatus = dragInfo
+        val intervalBtn = makeButton("Setiap ${dragIntervalMs} ms") { askDragValue(true) }
+        val distanceBtn = makeButton("Turun ${dragDistancePx} px") { askDragValue(false) }
+        dragIntervalBtn = intervalBtn
+        dragDistanceBtn = distanceBtn
+        val dragToggle = makeButton("OFF") {}
+        dragToggle.setOnClickListener { toggleDrag(dragToggle) }
+        dragBtn = dragToggle
+        val dragRow = hRow(intervalBtn, distanceBtn, dragToggle)
+        val accessibilityBtn = makeButton("Izin Drag") { openAccessibilitySettings() }
+        val dragBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(dragTitle)
+            addView(dragInfo)
+            addView(dragRow)
+            addView(accessibilityBtn)
+        }
+        updateDragUi(intervalBtn, distanceBtn)
+
         // Menu training: pilih target -> tekan Capture (hitung mundur 3 detik) saat kondisi aktif di game
         val train = LinearLayout(this)
         train.orientation = LinearLayout.VERTICAL
         train.visibility = View.GONE
         train.addView(hRow(
             makeButton("ADS buka") { setTarget("ads", "open") },
-            makeButton("ADS tutup") { setTarget("ads_off", "off") }
+            makeButton("ADS tutup") { setTarget("ads_off", "off") },
+            makeButton("Senjata…") { askLabel("weapon", "Nama senjata, mis. M416") }
         ))
         train.addView(hRow(
-            makeButton("Senjata…") { askLabel("weapon", "Nama senjata, mis. M416") },
-            makeButton("Scope…") { askLabel("scope", "Nama scope, mis. 3x") }
-        ))
-        train.addView(hRow(
+            makeButton("Scope…") { askLabel("scope", "Nama scope, mis. 3x") },
             makeButton("4 Crouch") { setTarget("stance_crouch", "CROUCH") },
             makeButton("5 Prone") { setTarget("stance_prone", "PRONE") }
+        ))
+        // Ambang kecocokan: turunkan kalau skor ADS/ikon tidak pernah mencapai ambang
+        val tv = TextView(this)
+        tv.setTextColor(Color.WHITE)
+        tv.textSize = 11f
+        tv.typeface = Typeface.MONOSPACE
+        tv.text = thrText()
+        tv.setPadding(dp(8), 0, dp(8), 0)
+        thrView = tv
+        train.addView(hRow(
+            makeButton("−") { adjustThr(-0.02f) },
+            tv,
+            makeButton("+") { adjustThr(0.02f) }
         ))
         train.addView(makeButton("● Capture (3 dtk)") { captureSample() })
 
         bodyLayout.addView(status)
         bodyLayout.addView(mainRow)
+        bodyLayout.addView(dragBox)
         bodyLayout.addView(train)
+        val scroll = MaxHeightScrollView(this, (real.heightPixels * 0.6f).toInt())
+        scroll.addView(bodyLayout)
         root.addView(header)
-        root.addView(bodyLayout)
+        root.addView(scroll)
 
         val p = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -226,10 +289,18 @@ class FloatingOverlayService : Service() {
 
         wm.addView(root, p)
         panel = root
-        body = bodyLayout
+        body = scroll
         trainMenu = train
         statusView = status
         masterBtn = master
+    }
+
+    private fun thrText(): String = "Ambang " + String.format("%.2f", thr)
+
+    private fun adjustThr(delta: Float) {
+        thr = (thr + delta).coerceIn(0.50f, 0.99f)
+        LocalStorage(this).saveThreshold(thr)
+        thrView?.text = thrText()
     }
 
     private fun toggleTrainMenu() {
@@ -294,6 +365,115 @@ class FloatingOverlayService : Service() {
         inputWin = null
     }
 
+    private fun updateDragUi(intervalBtn: Button, distanceBtn: Button) {
+        intervalBtn.text = "Setiap ${dragIntervalMs} ms"
+        distanceBtn.text = "Turun ${dragDistancePx} px"
+        val service = TouchAutomationService.instance
+        val enabled = service?.isRunning() == true
+        dragBtn?.text = if (enabled) "ON" else "OFF"
+        dragStatus?.text = if (service == null) {
+            "Drag: Accessibility belum aktif"
+        } else if (enabled) {
+            "Drag: ON • setiap ${dragIntervalMs} ms • turun ${dragDistancePx} px • titik layar tengah"
+        } else {
+            "Drag: OFF • titik layar tengah"
+        }
+    }
+
+    private fun toggleDrag(button: Button) {
+        val service = TouchAutomationService.instance
+        if (service == null) {
+            Toast.makeText(this, "Aktifkan Izin Drag dulu", Toast.LENGTH_SHORT).show()
+            openAccessibilitySettings()
+            return
+        }
+        service.configure(dragIntervalMs, dragDistancePx)
+        if (service.isRunning()) service.stopDragLoop() else service.startDragLoop()
+        button.text = if (service.isRunning()) "ON" else "OFF"
+        dragStatus?.text = if (service.isRunning()) {
+            "Drag: ON • setiap ${dragIntervalMs} ms • turun ${dragDistancePx} px • titik layar tengah"
+        } else {
+            "Drag: OFF • titik layar tengah"
+        }
+    }
+
+    private fun askDragValue(interval: Boolean) {
+        if (inputWin != null) return
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xEE10161C.toInt())
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+        }
+        val et = EditText(this).apply {
+            setText(if (interval) dragIntervalMs.toString() else dragDistancePx.toString())
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.GRAY)
+            hint = if (interval) "Interval (ms)" else "Jarak turun (px)"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            isSingleLine = true
+            minWidth = dp(220)
+            imeOptions = EditorInfo.IME_ACTION_DONE
+        }
+        box.addView(et)
+        box.addView(hRow(
+            makeButton("OK") {
+                val value = et.text.toString().toLongOrNull()
+                if (value == null || value <= 0L) {
+                    Toast.makeText(this, "Nilai harus angka lebih dari 0", Toast.LENGTH_SHORT).show()
+                    return@makeButton
+                }
+                if (interval) {
+                    dragIntervalMs = value.coerceIn(50L, 60000L)
+                } else {
+                    dragDistancePx = value.coerceIn(1L, 2000L).toInt()
+                }
+                LocalStorage(this).saveDragSettings(dragIntervalMs, dragDistancePx)
+                TouchAutomationService.instance?.configure(dragIntervalMs, dragDistancePx)
+                closeInput()
+                rebuildDragLabels()
+            },
+            makeButton("Batal") { closeInput() }
+        ))
+        val p = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            0,
+            PixelFormat.TRANSLUCENT
+        )
+        p.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        p.y = dp(16)
+        p.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
+        if (runCatching { wm.addView(box, p) }.isSuccess) {
+            inputWin = box
+            et.requestFocus()
+            et.post {
+                val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.showSoftInput(et, InputMethodManager.SHOW_IMPLICIT)
+            }
+        }
+    }
+
+    private fun rebuildDragLabels() {
+        dragIntervalBtn?.text = "Setiap ${dragIntervalMs} ms"
+        dragDistanceBtn?.text = "Turun ${dragDistancePx} px"
+        val service = TouchAutomationService.instance
+        dragStatus?.text = if (service?.isRunning() == true) {
+            "Drag: ON • setiap ${dragIntervalMs} ms • turun ${dragDistancePx} px • titik layar tengah"
+        } else if (service == null) {
+            "Drag: Accessibility belum aktif"
+        } else {
+            "Drag: OFF • titik layar tengah"
+        }
+        dragBtn?.text = if (service?.isRunning() == true) "ON" else "OFF"
+    }
+
+    private fun openAccessibilitySettings() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     private fun toggleMaster() {
         val e = ScreenCaptureService.engine
         if (e == null) {
@@ -349,6 +529,7 @@ class FloatingOverlayService : Service() {
     @Suppress("DEPRECATION")
     private fun showEditor() {
         if (editor != null) return
+        stepPx = 1
         val real = DisplayMetrics()
         wm.defaultDisplay.getRealMetrics(real)
 
@@ -379,6 +560,32 @@ class FloatingOverlayService : Service() {
         barLp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
         barLp.topMargin = dp(8)
         frame.addView(bar, barLp)
+
+        // Atur halus per piksel: tap kotak untuk memilih, lalu pakai panah / ukuran.
+        val stepBtn = makeButton("Step 1px") {}
+        stepBtn.setOnClickListener {
+            stepPx = when (stepPx) { 1 -> 4; 4 -> 12; else -> 1 }
+            stepBtn.text = "Step " + stepPx + "px"
+        }
+        val fine = hRow(
+            stepBtn,
+            makeButton("◀") { view.nudge(-stepPx, 0) },
+            makeButton("▲") { view.nudge(0, -stepPx) },
+            makeButton("▼") { view.nudge(0, stepPx) },
+            makeButton("▶") { view.nudge(stepPx, 0) },
+            makeButton("W−") { view.resizeBy(-stepPx, 0) },
+            makeButton("W+") { view.resizeBy(stepPx, 0) },
+            makeButton("H−") { view.resizeBy(0, -stepPx) },
+            makeButton("H+") { view.resizeBy(0, stepPx) }
+        )
+        fine.setBackgroundColor(0xDD10161C.toInt())
+        val fineLp = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        )
+        fineLp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        fineLp.bottomMargin = dp(56)
+        frame.addView(fine, fineLp)
 
         val p = WindowManager.LayoutParams(
             real.widthPixels,

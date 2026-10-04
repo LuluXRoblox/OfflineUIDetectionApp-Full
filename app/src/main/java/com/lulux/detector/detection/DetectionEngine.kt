@@ -25,12 +25,12 @@ class DetectionEngine(
     fun getState() = state
     fun getMatchedConfig() = lastConfig
 
-    fun process(frame: Bitmap, roi: RoiConfig) {
+    fun process(frame: Bitmap, roi: RoiConfig, threshold: Float = 0.88f) {
         if (!enabled) return
 
         // ADS terbuka = mirip sample "ads" DAN lebih mirip dari sample "ads_off" (kalau ada)
-        val open = templates.classify("ads", frame, roi.ads)
-        val off = templates.classify("ads_off", frame, roi.ads)
+        val open = templates.classify("ads", frame, roi.ads, threshold)
+        val off = templates.classify("ads_off", frame, roi.ads, threshold)
         val adsOpen = open.matched && open.score >= off.score
         if (!adsOpen) {
             state = DetectionState(adsOpen = false, adsScore = open.score)
@@ -38,10 +38,10 @@ class DetectionEngine(
             return
         }
 
-        val weapon = templates.classify("weapon", frame, roi.weapon)
-        val scope = templates.classify("scope", frame, roi.scope)
-        val prone = templates.classify("stance_prone", frame, roi.prone)
-        val crouch = templates.classify("stance_crouch", frame, roi.crouch)
+        val weapon = templates.classify("weapon", frame, roi.weapon, threshold)
+        val scope = templates.classify("scope", frame, roi.scope, threshold)
+        val prone = templates.classify("stance_prone", frame, roi.prone, threshold)
+        val crouch = templates.classify("stance_crouch", frame, roi.crouch, threshold)
 
         val stance = when {
             prone.matched && prone.score >= crouch.score -> Stance.PRONE
