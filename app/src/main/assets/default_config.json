@@ -1,0 +1,6 @@
+{
+  "configs": [
+    {"weapon":"M416","scope":"3x","stance":"PRONE","enabled":true},
+    {"weapon":"M416","scope":"3x","stance":"CROUCH","enabled":true}
+  ]
+}
