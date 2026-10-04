@@ -13,7 +13,7 @@ An offline Android app that captures the screen and detects configured UI states
 
 ## Requirements
 
-- Android Studio with Android SDK Platform 35 installed.
+- Android Studio with Android SDK Platform 34 installed.
 - JDK 17.
 - Android 8.0 (API 26) or newer device/emulator.
 

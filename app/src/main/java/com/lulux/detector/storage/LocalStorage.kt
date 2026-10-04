@@ -12,13 +12,13 @@ class LocalStorage(private val context: Context) {
 
     fun saveRoi(r: RoiConfig) {
         val o = JSONObject()
-        fun put(k:String, x:RoiRect) {
+        fun putRect(k:String, x:RoiRect) {
             o.put(k, JSONObject().apply {
                 put("x",x.x); put("y",x.y); put("w",x.width); put("h",x.height)
             })
         }
-        put("ads",r.ads); put("weapon",r.weapon); put("scope",r.scope)
-        put("crouch",r.crouch); put("prone",r.prone); put("control",r.control)
+        putRect("ads",r.ads); putRect("weapon",r.weapon); putRect("scope",r.scope)
+        putRect("crouch",r.crouch); putRect("prone",r.prone); putRect("control",r.control)
         prefs.edit().putString("roi",o.toString()).apply()
     }
 
@@ -26,12 +26,12 @@ class LocalStorage(private val context: Context) {
         val s = prefs.getString("roi", null) ?: return RoiConfig()
         return runCatching {
             val o=JSONObject(s)
-            fun get(k:String):RoiRect {
+            fun getRect(k:String):RoiRect {
                 val q=o.getJSONObject(k)
                 return RoiRect(q.getDouble("x").toFloat(),q.getDouble("y").toFloat(),
                     q.getDouble("w").toFloat(),q.getDouble("h").toFloat())
             }
-            RoiConfig(get("ads"),get("weapon"),get("scope"),get("crouch"),get("prone"),get("control"))
+            RoiConfig(getRect("ads"),getRect("weapon"),getRect("scope"),getRect("crouch"),getRect("prone"),getRect("control"))
         }.getOrDefault(RoiConfig())
     }
 

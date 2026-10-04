@@ -174,7 +174,7 @@ class FloatingOverlayService : Service() {
             text = "AUTO DRAG"
             setTextColor(Color.WHITE)
             textSize = 11f
-            typeface = Typeface.BOLD
+            setTypeface(null, Typeface.BOLD)
             setPadding(dp(8), dp(5), dp(8), dp(2))
         }
         val dragInfo = TextView(this).apply {
@@ -410,7 +410,7 @@ class FloatingOverlayService : Service() {
             setHintTextColor(Color.GRAY)
             hint = if (interval) "Interval (ms)" else "Jarak turun (px)"
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            isSingleLine = true
+            setSingleLine(true)
             minWidth = dp(220)
             imeOptions = EditorInfo.IME_ACTION_DONE
         }

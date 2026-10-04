@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Offline UI Detector</string>
+    <string name="accessibility_description">Memungkinkan panel floating menjalankan drag otomatis sesuai interval dan jarak yang dipilih.</string>
 </resources>

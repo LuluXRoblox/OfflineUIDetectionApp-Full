@@ -5,4 +5,4 @@
     android:notificationTimeout="100"
     android:canRetrieveWindowContent="false"
     android:canPerformGestures="true"
-    android:description="Memungkinkan panel floating menjalankan drag otomatis sesuai interval dan jarak yang dipilih." />
+    android:description="@string/accessibility_description" />
