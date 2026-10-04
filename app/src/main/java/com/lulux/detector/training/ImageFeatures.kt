@@ -43,8 +43,8 @@ object ImageFeatures {
             }
         }
         val mean = sum / out.size
-        val sd = sqrt((sum2 / out.size - mean*mean).coerceAtLeast(1e-8))
-        for (j in out.indices) out[j] = ((out[j] - mean) / sd).coerceIn(-3f,3f) / 3f
+        val sd = sqrt((sum2 / out.size - mean * mean).coerceAtLeast(1e-8)).toFloat()
+        for (j in out.indices) out[j] = ((out[j] - mean.toFloat()) / sd).coerceIn(-3f,3f) / 3f
         return out
     }
 
