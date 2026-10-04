@@ -14,11 +14,13 @@ data class RoiRect(
     )
 }
 
+// Default diukur dari screenshot HUD PUBG Mobile (landscape), label 1..5.
+// Bisa digeser lewat tombol ROI di panel floating.
 data class RoiConfig(
-    val ads: RoiRect = RoiRect(.45f,.35f,.10f,.10f),
-    val weapon: RoiRect = RoiRect(.80f,.05f,.15f,.12f),
-    val scope: RoiRect = RoiRect(.43f,.02f,.14f,.08f),
-    val crouch: RoiRect = RoiRect(.78f,.70f,.10f,.10f),
-    val prone: RoiRect = RoiRect(.68f,.70f,.10f,.10f),
-    val control: RoiRect = RoiRect(.55f,.55f,.25f,.30f)
+    val ads: RoiRect = RoiRect(.882f, .293f, .067f, .145f),     // 3: tombol ADS
+    val weapon: RoiRect = RoiRect(.390f, .862f, .220f, .085f),  // 1: slot senjata
+    val scope: RoiRect = RoiRect(.693f, .300f, .045f, .095f),   // 2: indikator scope (6x)
+    val crouch: RoiRect = RoiRect(.902f, .823f, .065f, .145f),  // 4: tombol stance
+    val prone: RoiRect = RoiRect(.813f, .843f, .064f, .139f),   // 5: tombol stance
+    val control: RoiRect = RoiRect(.55f, .55f, .25f, .30f)
 )

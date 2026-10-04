@@ -55,4 +55,14 @@ class LocalStorage(private val context: Context) {
         }
         return out
     }
+
+    fun saveTrainTarget(group: String, label: String) {
+        prefs.edit().putString("train_group", group).putString("train_label", label).apply()
+    }
+
+    fun loadTrainTarget(): Pair<String, String>? {
+        val g = prefs.getString("train_group", null) ?: return null
+        val l = prefs.getString("train_label", null) ?: return null
+        return Pair(g, l)
+    }
 }

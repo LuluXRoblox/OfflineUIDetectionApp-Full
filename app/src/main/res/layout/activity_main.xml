@@ -40,6 +40,18 @@
             android:layout_height="wrap_content"/>
 
         <Button
+            android:id="@+id/startFloating"
+            android:text="Show Floating Panel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+
+        <Button
+            android:id="@+id/stopFloating"
+            android:text="Hide Floating Panel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+
+        <Button
             android:id="@+id/calibrate"
             android:text="ROI Calibration"
             android:layout_width="match_parent"

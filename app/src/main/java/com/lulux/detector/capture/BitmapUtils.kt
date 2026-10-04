@@ -16,7 +16,9 @@ object BitmapUtils {
         val bitmap = Bitmap.createBitmap(paddedWidth, image.height, Bitmap.Config.ARGB_8888)
         buffer.rewind()
         bitmap.copyPixelsFromBuffer(buffer)
-        return if (paddedWidth == image.width) bitmap
-        else Bitmap.createBitmap(bitmap, 0, 0, image.width, image.height)
+        if (paddedWidth == image.width) return bitmap
+        val cropped = Bitmap.createBitmap(bitmap, 0, 0, image.width, image.height)
+        bitmap.recycle()
+        return cropped
     }
 }

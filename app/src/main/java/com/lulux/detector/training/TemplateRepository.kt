@@ -18,7 +18,7 @@ class TemplateRepository(private val dir: File) {
         save()
     }
 
-    fun classify(group: String, frame: Bitmap, roi: RoiRect, threshold: Float = 0.82f): Classification {
+    fun classify(group: String, frame: Bitmap, roi: RoiRect, threshold: Float = 0.88f): Classification {
         val templates = groups[group].orEmpty()
         if (templates.isEmpty()) return Classification(false, null, 0f)
 
