@@ -1,6 +1,7 @@
 package com.lulux.detector
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
@@ -78,7 +79,7 @@ class MainActivity : Activity() {
         val input=EditText(this); input.hint=title
         AlertDialog.Builder(this).setTitle("Nama label").setView(input)
             .setMessage("Setelah nama disimpan, capture sample ROI dari layar saat kondisi tersebut aktif.")
-            .setPositiveButton("Capture sekarang"){_,_ ->
+            .setPositiveButton("Capture sekarang") { _, _ ->
                 val label=input.text.toString().trim()
                 if(label.isNotEmpty()) {
                     captureCurrent(group,label)
@@ -111,7 +112,7 @@ class MainActivity : Activity() {
         val st=EditText(this); st.hint="STAND / CROUCH / PRONE"
         layout.addView(w);layout.addView(s);layout.addView(st)
         AlertDialog.Builder(this).setTitle("Tambah Config").setView(layout)
-            .setPositiveButton("Simpan"){_,_ ->
+            .setPositiveButton("Simpan") { _, _ ->
                 val list=storage.loadConfigs()
                 list.removeAll { it.weapon.equals(w.text.toString(),true) && it.scope.equals(s.text.toString(),true) && it.stance.equals(st.text.toString(),true) }
                 list += RecoilConfig(w.text.toString(),s.text.toString(),st.text.toString(),true)
@@ -131,7 +132,7 @@ class MainActivity : Activity() {
         debug.text="MASTER: ${master.isChecked}\nCAPTURE: ${ScreenCaptureService.running}\n"
         val s=ScreenCaptureService.engine?.getState()
         if(s!=null) {
-            debug.append("ADS: ${s.adsOpen}\nWEAPON: ${s.weapon}\nSCOPE: ${s.scope}\nSTANCE: ${s.stance}\nCONF: ${"%.2f".format(s.confidence)}\nCONFIG: ${ScreenCaptureService.engine?.getMatchedConfig()}")
+            debug.append("ADS: ${s.adsOpen}\nWEAPON: ${s.weapon}\nSCOPE: ${s.scope}\nSTANCE: ${s.stance}\nCONF: ${"%.2f".format(s.confidence)}\nCONFIG: ${ScreenCaptureService.engine?.getMatchedCo[...]
         }
     }
 
