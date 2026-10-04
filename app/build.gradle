@@ -1,23 +1,18 @@
-plugins {
-    id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
-}
-
 android {
     namespace 'com.lulux.detector'
-    compileSdk 35
-
+    compileSdk 28  // turun dari 35, cukup untuk Android 9
+    
+    defaultConfig {
+        applicationId 'com.lulux.detector'
+        minSdk 28      // Android 9 (API 28)
+        targetSdk 28   // target Android 9
+        versionCode 1
+        versionName '1.0'
+    }
+    
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
-    }
-
-    defaultConfig {
-        applicationId 'com.lulux.detector'
-        minSdk 26
-        targetSdk 35
-        versionCode 1
-        versionName '1.0'
     }
 }
 
