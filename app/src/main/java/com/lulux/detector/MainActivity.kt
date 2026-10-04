@@ -2,6 +2,8 @@ package com.lulux.detector
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
@@ -132,7 +134,7 @@ class MainActivity : Activity() {
         debug.text="MASTER: ${master.isChecked}\nCAPTURE: ${ScreenCaptureService.running}\n"
         val s=ScreenCaptureService.engine?.getState()
         if(s!=null) {
-            debug.append("ADS: ${s.adsOpen}\nWEAPON: ${s.weapon}\nSCOPE: ${s.scope}\nSTANCE: ${s.stance}\nCONF: ${"%.2f".format(s.confidence)}\nCONFIG: ${ScreenCaptureService.engine?.getMatchedCo[...]
+            debug.append("ADS: ${s.adsOpen}\nWEAPON: ${s.weapon}\nSCOPE: ${s.scope}\nSTANCE: ${s.stance}\nCONF: ${"%.2f".format(s.confidence)}\nCONFIG: ${ScreenCaptureService.engine?.getMatchedConfig()}")
         }
     }
 
